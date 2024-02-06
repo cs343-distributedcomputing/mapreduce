@@ -49,5 +49,5 @@ func main() {
 	if err != nil {
 		log.Fatal("listen error:", err)
 	}
-	go http.Serve(l, nil)
+	http.Serve(l, nil)
 }
