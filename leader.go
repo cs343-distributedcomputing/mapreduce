@@ -1,7 +1,7 @@
 // assigns one worker to do map or reduce
 // check if a worker is alive
 // tally of words
-// status of worker: idle, alive, dead
+// status of worker: idle, in-progress, completed
 
 // calls rpc
 package main

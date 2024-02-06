@@ -15,7 +15,7 @@ import (
 )
 
 type Worker struct {
-	status string // idle, dead, alive
+	status string // idle, in-progress, completed
 }
 
 type MapKeyValue struct {
