@@ -7,10 +7,12 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/rpc"
+	"errors"
+	"fmt"
 )
+
 
 type MapArgs struct {
 	Key string
@@ -22,35 +24,128 @@ type ReduceArgs struct {
 	Value []string
 }
 
-func main() {
-	serverAddress := "10.155.1.178"
-	leader, err := rpc.DialHTTP("tcp", serverAddress + ":3000")
+type Worker struct { // redundant, also in worker.go?
+	Status string // idle, in-progress
+}
+
+var ( // global vars
+	serverAddress string = "10.155.1.178"
+	workers []*Worker = []*Worker{ // 4 workers for example
+		{Status: "idle"},
+		{Status: "idle"},
+		{Status: "idle"},
+		{Status: "idle"},
+	}
+)
+
+func (t *Worker) SetWorkerStatus(status string) {
+	t.Status = status
+}
+
+func assignTaskToWorker(taskType string, taskArgs interface{}) (error, int) {
+	if len(workers) == 0 {
+		return errors.New("\nno workers defined"), -1
+	}
+
+	// find idle worker to assign task to
+	var worker *Worker
+	for _, w := range workers {
+		if w.Status == "idle" {
+			worker = w
+			break
+		}
+	}
+
+	if worker == nil {
+		return errors.New("no idle worker available"), -1
+	}
+
+	// change status of worker to 'in-progress' since it's getting a task
+	worker.SetWorkerStatus("in-progress")
+
+	// dial server to make rpc's
+	client, err := rpc.DialHTTP("tcp", serverAddress + ":3000")
 	if err != nil {
-		log.Fatal("\ndialing error:", err)
+		log.Fatal("dialing:", err)
+		return err, -1
 	}
 
-	// map and reduce rpc calls for multiple worker machines
-	numWorkers := 3
-	for i:=0; i < numWorkers; i++ {
-		// sync call: MAP
-		mapArgs := &MapArgs{"test","1"} // args for map or reduce funcs
-		var mapReply int
-		err = leader.Call("Worker.Map", mapArgs, &mapReply)
-		if err != nil {
-			log.Fatal("\nworker map error:", err)
-		}
-		fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, err reply - %d", 
-			mapArgs.Key, mapArgs.Value, mapReply)
-
-		// sync call: REDUCE
-		var reduceArgList = []string{"1", "1"}
-		reduceArgs := &ReduceArgs{"test", reduceArgList} // args for map or reduce funcs
-		var reduceReply int
-		err = leader.Call("Worker.Reduce", reduceArgs, &reduceReply)
-		if err != nil {
-			log.Fatal("\n\nworker reduce error:", err)
-		}
-		fmt.Printf("\nLeader calls reduce rpc: key - %s, value - %s, err reply - %d", 
-			reduceArgs.Key, reduceArgs.Value, reduceReply)
+	// rpc calls based on task type (map or reduce)
+	var reply int
+	if taskType == "Map" {
+		err = client.Call("Worker.Map", taskArgs, &reply)
+	} else if taskType == "Reduce" {
+		err = client.Call("Worker.Reduce", taskArgs, &reply)
+	} else {
+		err = errors.New("invalid task type :<")
 	}
+
+	// after worker is done reset its status to available/idle
+	worker.SetWorkerStatus("idle")
+
+	return err, reply
+}
+
+func main() {
+	// leader, err := rpc.DialHTTP("tcp", serverAddress + ":3000")
+	// if err != nil {
+	// 	log.Fatal("\ndialing error:", err)
+	// }
+
+	// // map and reduce rpc calls for multiple worker machines
+	// numWorkers := 3
+	// for i:=0; i < numWorkers; i++ {
+	// 	// sync call: MAP
+	// 	mapArgs := &MapArgs{"test","1"} // args for map or reduce funcs
+	// 	var mapReply int
+	// 	err = leader.Call("Worker.Map", mapArgs, &mapReply)
+	// 	if err != nil {
+	// 		log.Fatal("\nworker map error:", err)
+	// 	}
+	// 	fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, err reply - %d", 
+	// 		mapArgs.Key, mapArgs.Value, mapReply)
+
+	// 	// sync call: REDUCE
+	// 	var reduceArgList = []string{"1", "1"}
+	// 	reduceArgs := &ReduceArgs{"test", reduceArgList} // args for map or reduce funcs
+	// 	var reduceReply int
+	// 	err = leader.Call("Worker.Reduce", reduceArgs, &reduceReply)
+	// 	if err != nil {
+	// 		log.Fatal("\n\nworker reduce error:", err)
+	// 	}
+	// 	fmt.Printf("\nLeader calls reduce rpc: key - %s, value - %s, err reply - %d", 
+	// 		reduceArgs.Key, reduceArgs.Value, reduceReply)
+	// }
+
+	numInputFiles := 5 // change as needed
+	filesProcessed := 0 // increment as files are processed
+	done := false // status of mapreduce entire operation 
+	// TODO: flag done as true once entire operation finishes
+
+	// periodically check worker status to reassign tasks
+	for !done {
+        if filesProcessed >= numInputFiles {
+			break // no more tasks to assign
+		}
+
+        // assign map tasks
+        mapArgs := &MapArgs{Key: "test", Value: "1"}
+		err, mapReply := assignTaskToWorker("Map", mapArgs)
+        if err != nil {
+            log.Printf("error assigning map task: %v", err)
+        }
+		fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, reply - %d", 
+					mapArgs.Key, mapArgs.Value, mapReply)
+
+        // assign reduce tasks
+        reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
+		err, reduceReply := assignTaskToWorker("Reduce", reduceArgs)
+        if err != nil {
+            log.Printf("error assigning reduce task: %v", err)
+        }
+		fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d", 
+					reduceArgs.Key, reduceArgs.Value, reduceReply)
+
+		filesProcessed++
+    }
 }
