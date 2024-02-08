@@ -26,24 +26,31 @@ func main() {
 	serverAddress := "10.155.1.178"
 	leader, err := rpc.DialHTTP("tcp", serverAddress + ":3000")
 	if err != nil {
-		log.Fatal("dialing:", err)
+		log.Fatal("\ndialing error:", err)
 	}
 
-	// sync call
-	mapArgs := &MapArgs{"test","1"} // args for map or reduce funcs
-	var mapReply int
-	err = leader.Call("Worker.Map", mapArgs, &mapReply)
-	if err != nil {
-		log.Fatal("worker map error:", err)
-	}
-	fmt.Printf("map result: %d*%d=%d", mapArgs.Key, mapArgs.Value, mapReply)
+	// map and reduce rpc calls for multiple worker machines
+	numWorkers := 3
+	for i:=0; i < numWorkers; i++ {
+		// sync call: MAP
+		mapArgs := &MapArgs{"test","1"} // args for map or reduce funcs
+		var mapReply int
+		err = leader.Call("Worker.Map", mapArgs, &mapReply)
+		if err != nil {
+			log.Fatal("\nworker map error:", err)
+		}
+		fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, err reply - %d", 
+			mapArgs.Key, mapArgs.Value, mapReply)
 
-	var reduceArgList = []string{"1", "1"}
-	reduceArgs := &ReduceArgs{"test", reduceArgList} // args for map or reduce funcs
-	var reduceReply int
-	err = leader.Call("Worker.Reduce", reduceArgs, &reduceReply)
-	if err != nil {
-		log.Fatal("worker reduce error:", err)
+		// sync call: REDUCE
+		var reduceArgList = []string{"1", "1"}
+		reduceArgs := &ReduceArgs{"test", reduceArgList} // args for map or reduce funcs
+		var reduceReply int
+		err = leader.Call("Worker.Reduce", reduceArgs, &reduceReply)
+		if err != nil {
+			log.Fatal("\n\nworker reduce error:", err)
+		}
+		fmt.Printf("\nLeader calls reduce rpc: key - %s, value - %s, err reply - %d", 
+			reduceArgs.Key, reduceArgs.Value, reduceReply)
 	}
-	fmt.Printf("reduce result: %d*%d=%d", reduceArgs.Key, reduceArgs.Value, reduceReply)
 }

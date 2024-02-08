@@ -30,13 +30,13 @@ type ReducKeyValue struct {
 
 func (t *Worker) Map(args *MapKeyValue, reply *int) error {
 	// TODO: map words; change return to error later
-	fmt.Printf("map func")
+	fmt.Printf("\n\nmap func called in worker machine")
 	return nil
 }
 
 func (t *Worker) Reduce(args *ReducKeyValue, reply *int) error {
 	// TODO: reduce words; change return to error later
-	fmt.Printf("reduce func")
+	fmt.Printf("\n\nreduce func called in worker machine")
 	return nil
 }
 
@@ -44,10 +44,12 @@ func main() {
 	worker := new(Worker)
 	rpc.Register(worker)
 	rpc.HandleHTTP()
+
+	fmt.Printf("\nWorker is listening...")
 	l, err := net.Listen("tcp", ":3000")
-	fmt.Printf("yas listen worker")
+
 	if err != nil {
-		log.Fatal("listen error:", err)
+		log.Fatal("\nlisten error:", err)
 	}
 	http.Serve(l, nil)
 }
