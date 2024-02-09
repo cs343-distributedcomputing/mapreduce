@@ -29,12 +29,12 @@ type Worker struct { // redundant, also in worker.go?
 }
 
 var ( // global vars
-	serverAddress string = "10.155.1.178"
+	serverAddress string = "10.154.0.117"
 	workers []*Worker = []*Worker{ // 4 workers for example
 		{Status: "idle"},
-		{Status: "idle"},
-		{Status: "idle"},
-		{Status: "idle"},
+		// {Status: "idle"},
+		// {Status: "idle"},
+		// {Status: "idle"},
 	}
 )
 
@@ -42,7 +42,7 @@ func (t *Worker) SetWorkerStatus(status string) {
 	t.Status = status
 }
 
-func assignTaskToWorker(taskType string, taskArgs interface{}) (error, int) {
+func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (error, int) {
 	if len(workers) == 0 {
 		return errors.New("\nno workers defined"), -1
 	}
@@ -63,12 +63,24 @@ func assignTaskToWorker(taskType string, taskArgs interface{}) (error, int) {
 	// change status of worker to 'in-progress' since it's getting a task
 	worker.SetWorkerStatus("in-progress")
 
-	// dial server to make rpc's
-	client, err := rpc.DialHTTP("tcp", serverAddress + ":3000")
+	
+	client, err := rpc.DialHTTP("tcp", serverAddress + ":" + address)
 	if err != nil {
 		log.Fatal("dialing:", err)
 		return err, -1
 	}
+
+	// client1, err1 := rpc.DialHTTP("tcp", serverAddress + ":3001")
+	// if err1 != nil {
+	// 	log.Fatal("dialing:", err1)
+	// 	return err1, -1
+	// }
+
+	// client2, err2 := rpc.DialHTTP("tcp", serverAddress + ":3002")
+	// if err2 != nil {
+	// 	log.Fatal("dialing:", err2)
+	// 	return err2, -1
+	// }
 
 	// rpc calls based on task type (map or reduce)
 	var reply int
@@ -117,7 +129,7 @@ func main() {
 	// 		reduceArgs.Key, reduceArgs.Value, reduceReply)
 	// }
 
-	numInputFiles := 5 // change as needed
+	numInputFiles := 1 // change as needed
 	filesProcessed := 0 // increment as files are processed
 	done := false // status of mapreduce entire operation 
 	// TODO: flag done as true once entire operation finishes
@@ -129,23 +141,29 @@ func main() {
 		}
 
         // assign map tasks
-        mapArgs := &MapArgs{Key: "test", Value: "1"}
-		err, mapReply := assignTaskToWorker("Map", mapArgs)
-        if err != nil {
-            log.Printf("error assigning map task: %v", err)
-        }
-		fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, reply - %d", 
-					mapArgs.Key, mapArgs.Value, mapReply)
+		var addressList [3]string
+		addressList[0] = "3000"
+		addressList[1] = "3001"
+		addressList[2] = "3002"
+		// dial server to make rpc's
+		for _, address := range addressList {
+			mapArgs := &MapArgs{Key: "test", Value: "1"}
+			err, mapReply := assignTaskToWorker("Map", mapArgs, address)
+			if err != nil {
+				log.Printf("error assigning map task: %v", err)
+			}
+			fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, reply - %d", 
+						mapArgs.Key, mapArgs.Value, mapReply)
 
-        // assign reduce tasks
-        reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
-		err, reduceReply := assignTaskToWorker("Reduce", reduceArgs)
-        if err != nil {
-            log.Printf("error assigning reduce task: %v", err)
-        }
-		fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d", 
-					reduceArgs.Key, reduceArgs.Value, reduceReply)
-
+			// assign reduce tasks
+			reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
+			err, reduceReply := assignTaskToWorker("Reduce", reduceArgs, address)
+			if err != nil {
+				log.Printf("error assigning reduce task: %v", err)
+			}
+			fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d", 
+			reduceArgs.Key, reduceArgs.Value, reduceReply)
+		}
 		filesProcessed++
     }
 }

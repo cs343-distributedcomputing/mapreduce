@@ -46,7 +46,7 @@ func main() {
 	rpc.HandleHTTP()
 
 	fmt.Printf("\nWorker is listening...")
-	l, err := net.Listen("tcp", ":3000")
+	l, err := net.Listen("tcp", ":3002")
 
 	if err != nil {
 		log.Fatal("\nlisten error:", err)
