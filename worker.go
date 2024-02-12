@@ -24,12 +24,16 @@ type MapKeyValue struct {
 	Value string
 }
 
+type MapChunkInput struct {
+	Chunk string
+}
+
 type ReducKeyValue struct {
 	Key string
 	Values []string
 }
 
-func (t *Worker) Map(args *string, reply *int) []MapKeyValue {
+func (t *Worker) Map(args *MapChunkInput, reply *int) []MapKeyValue {
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
 	words := strings.Fields(args) // split by white space
