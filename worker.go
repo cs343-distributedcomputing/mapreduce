@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"log"
 	"fmt"
+	"strings"
 )
 
 type Worker struct {
@@ -28,10 +29,15 @@ type ReducKeyValue struct {
 	Values []string
 }
 
-func (t *Worker) Map(args *MapKeyValue, reply *int) error {
+func (t *Worker) Map(args *string, reply *int) []MapKeyValue {
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
-	return nil
+	words := strings.Fields(args) // split by white space
+	var kvPairs []MapKeyValue
+	for _, word := range words {
+        kvPairs = append(kvPairs, MapKeyValue{word, "1"})
+    }
+    return kvPairs
 }
 
 func (t *Worker) Reduce(args *ReducKeyValue, reply *int) error {
@@ -46,7 +52,7 @@ func main() {
 	rpc.HandleHTTP()
 
 	fmt.Printf("\nWorker is listening...")
-	l, err := net.Listen("tcp", ":3002")
+	l, err := net.Listen("tcp", ":3000")
 
 	if err != nil {
 		log.Fatal("\nlisten error:", err)
