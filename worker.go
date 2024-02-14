@@ -7,11 +7,11 @@ package main
 
 import (
 	// "errors"
-	"net"
-	"net/rpc"
-	"net/http"
-	"log"
 	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
 	"strings"
 )
 
@@ -20,28 +20,34 @@ type Worker struct {
 }
 
 type MapKeyValue struct {
-	Key string
+	Key   string
 	Value string
 }
 
 type MapChunkInput struct {
-	Chunk string
+	Chunk []string
 }
 
 type ReducKeyValue struct {
-	Key string
+	Key    string
 	Values []string
 }
 
 func (t *Worker) Map(args *MapChunkInput, reply *int) []MapKeyValue {
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
-	words := strings.Fields(args) // split by white space
+	//fmt.Printf(string(args.Chunk))
+	chunks := args.Chunk
+	//words := strings.Fields(args) // split by white space
 	var kvPairs []MapKeyValue
-	for _, word := range words {
-        kvPairs = append(kvPairs, MapKeyValue{word, "1"})
-    }
-    return kvPairs
+	for _, chunk := range chunks {
+		words := strings.Fields(chunk)
+		for _, word := range words {
+			kvPairs = append(kvPairs, MapKeyValue{word, "1"})
+			fmt.Printf(word)
+		}
+	}
+	return kvPairs
 }
 
 func (t *Worker) Reduce(args *ReducKeyValue, reply *int) error {
