@@ -1,9 +1,3 @@
-// assigns one worker to do map or reduce
-// check if a worker is alive
-// tally of words
-// status of worker: idle, in-progress, completed
-
-// calls rpc
 package main
 
 import (
@@ -12,7 +6,6 @@ import (
 	"log"
 	"net/rpc"
 	"os"
-
 	//"regexp"
 	"io"
 	"strings"
@@ -27,18 +20,8 @@ type ReduceArgs struct {
 	Value []string
 }
 
-type Worker struct { // redundant, also in worker.go?
-	Status string // idle, in-progress
-}
-
 var ( // global vars
-	serverAddress string    = "10.154.0.117"
-	workers       []*Worker = []*Worker{ // 4 workers for example
-		{Status: "idle"},
-		// {Status: "idle"},
-		// {Status: "idle"},
-		// {Status: "idle"},
-	}
+	serverAddress string  = "10.154.0.117"
 	files []string = []string{
 		"input/test.txt",
 		//"input/",
@@ -46,37 +29,14 @@ var ( // global vars
 	}
 )
 
-func (t *Worker) SetWorkerStatus(status string) {
-	t.Status = status
-}
-
 func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (error, int) {
-	fmt.Printf("assigning tasks")
-	if len(workers) == 0 {
-		return errors.New("\nno workers defined"), -1
-	}
-
-	// find idle worker to assign task to
-	var worker *Worker
-	for _, w := range workers {
-		if w.Status == "idle" {
-			worker = w
-			break
-		}
-	}
-
-	if worker == nil {
-		return errors.New("no idle worker available"), -1
-	}
-
-	// change status of worker to 'in-progress' since it's getting a task
-	worker.SetWorkerStatus("in-progress")
-
+	fmt.Printf("\nassigning tasks")
 	client, err := rpc.DialHTTP("tcp", serverAddress+":"+address)
 	if err != nil {
 		log.Fatal("dialing:", err)
 		return err, -1
 	}
+	fmt.Printf("\nhttp dialed")
 
 	// client1, err1 := rpc.DialHTTP("tcp", serverAddress + ":3001")
 	// if err1 != nil {
@@ -93,16 +53,14 @@ func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (
 	// rpc calls based on task type (map or reduce)
 	var reply int
 	if taskType == "Map" {
+		fmt.Printf("\nleader calls worker to do map")
 		err = client.Call("Worker.Map", taskArgs, &reply)
 	} else if taskType == "Reduce" {
 		err = client.Call("Worker.Reduce", taskArgs, &reply)
 	} else {
 		err = errors.New("invalid task type :<")
 	}
-
-	// after worker is done reset its status to available/idle
-	worker.SetWorkerStatus("idle")
-
+	fmt.Printf("\nreply: " + string(reply))
 	return err, reply
 }
 func read_file_chunk(chunkSize int64, startByte int64, filePath string) string {
@@ -172,7 +130,6 @@ func split_chunk(files []string) []string {
 }
 
 func main() {
-
 	numInputFiles := 1  // change as needed
 	filesProcessed := 0 // increment as files are processed
 	done := false       // status of mapreduce entire operation
@@ -190,32 +147,32 @@ func main() {
 		// addressList[2] = "3002"
 
 		chunkArray := split_chunk(files)
-		fmt.Print(chunkArray)
+		fmt.Print("\n chunkArray: ", chunkArray)
 
 		numChunksForOneWorker := len(chunkArray) / len(addressList)
 
 		// for each worker get {chunkArray/numWrokers} number of chunks
 		// dial server to make rpc's
 		for _, address := range addressList { // for each worker
-			//chunk := "test"
 			// loop thru number of chunks that one worker needs to work on
 			// first chunk is the index of the first chunk that the address will grab
 			firstChunk := 0
 			// assign map tasks
-			mapArgs := &MapArgs{chunkArray[firstChunk:numChunksForOneWorker]}
-			firstChunk = firstChunk + numChunksForOneWorker
+			mapArgs := &MapArgs{Chunk: chunkArray[firstChunk:numChunksForOneWorker]}
+			firstChunk += numChunksForOneWorker
+			fmt.Print("\nmapArgs: ", mapArgs)
 			err, mapReply := assignTaskToWorker("Map", mapArgs, address)
 			if err != nil {
-				log.Printf("error assigning map task: %v", err)
+				fmt.Printf("error assigning map task: %v", err)
 			}
 			fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, reply - %d",
 				mapArgs.Chunk, mapReply)
 
-			// assign reduce tasks
+			// assign reduce tasks - mocked; did not need to implement
 			reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
 			err, reduceReply := assignTaskToWorker("Reduce", reduceArgs, address)
 			if err != nil {
-				log.Printf("error assigning reduce task: %v", err)
+				fmt.Printf("error assigning reduce task: %v", err)
 			}
 			fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d",
 				reduceArgs.Key, reduceArgs.Value, reduceReply)

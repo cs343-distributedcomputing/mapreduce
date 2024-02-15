@@ -24,7 +24,7 @@ type MapKeyValue struct {
 	Value string
 }
 
-type MapChunkInput struct {
+type MapArgs struct {
 	Chunk []string
 }
 
@@ -33,7 +33,7 @@ type ReducKeyValue struct {
 	Values []string
 }
 
-func (t *Worker) Map(args *MapChunkInput, reply *int) []MapKeyValue {
+func (t *Worker) Map(args *MapArgs, reply *int) []MapKeyValue {
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
 	//fmt.Printf(string(args.Chunk))
@@ -61,8 +61,9 @@ func main() {
 	rpc.Register(worker)
 	rpc.HandleHTTP()
 
-	fmt.Printf("\nWorker is listening...")
-	l, err := net.Listen("tcp", ":3000")
+	port := ":3000" // change as needed
+	fmt.Printf("\nWorker is listening at port: " + port)
+	l, err := net.Listen("tcp", port)
 
 	if err != nil {
 		log.Fatal("\nlisten error:", err)
