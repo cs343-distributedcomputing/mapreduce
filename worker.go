@@ -33,7 +33,9 @@ type ReducKeyValue struct {
 	Values []string
 }
 
-func (t *Worker) Map(args *MapArgs, reply *int) []MapKeyValue {
+// returns mapReply of list of key val pairs
+// ex: [MapKeyValue{"hi": "1"}, MapKeyValue{"hi", "1"}, MapKeyValue{"hey", "1"}]
+func (t *Worker) Map(args *MapArgs, reply *int) []MapKeyValue { 
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
 	//fmt.Printf(string(args.Chunk))
