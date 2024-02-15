@@ -6,7 +6,6 @@
 package main
 
 import (
-	// "errors"
 	"fmt"
 	"log"
 	"net"
@@ -35,7 +34,7 @@ type ReducKeyValue struct {
 
 // returns mapReply of list of key val pairs
 // ex: [MapKeyValue{"hi": "1"}, MapKeyValue{"hi", "1"}, MapKeyValue{"hey", "1"}]
-func (t *Worker) Map(args *MapArgs, reply *int) []MapKeyValue { 
+func (t *Worker) Map(args MapArgs, reply *[]MapKeyValue) error { 
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
 	//fmt.Printf(string(args.Chunk))
@@ -46,10 +45,11 @@ func (t *Worker) Map(args *MapArgs, reply *int) []MapKeyValue {
 		words := strings.Fields(chunk)
 		for _, word := range words {
 			kvPairs = append(kvPairs, MapKeyValue{word, "1"})
-			fmt.Printf(word)
+			fmt.Printf("\n" + word)
 		}
 	}
-	return kvPairs
+	*reply = kvPairs
+	return nil
 }
 
 func (t *Worker) Reduce(args *ReducKeyValue, reply *int) error {

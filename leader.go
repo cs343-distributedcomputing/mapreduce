@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/rpc"
 	"os"
-	//"regexp"
+	"regexp"
 	"io"
 	"strings"
 )
@@ -15,7 +15,7 @@ type MapArgs struct {
 	Chunk []string
 }
 
-type MapReply struct {
+type MapKeyValue struct {
 	Key   string
 	Value string
 }
@@ -26,7 +26,7 @@ type ReduceArgs struct {
 }
 
 var ( // global vars
-	serverAddress string  = "10.154.0.117"
+	serverAddress string  = "localhost"
 	files []string = []string{
 		"input/test.txt",
 		//"input/",
@@ -34,9 +34,9 @@ var ( // global vars
 	}
 )
 
-func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (error, []MapReply) {
+func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (error, []MapKeyValue) {
 	fmt.Printf("\nassigning tasks")
-	client, err := rpc.DialHTTP("tcp", serverAddress+":"+address)
+	client, err := rpc.DialHTTP("tcp", serverAddress + ":" + address)
 	if err != nil {
 		log.Fatal("dialing:", err)
 		return err, nil
@@ -56,7 +56,9 @@ func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (
 	// }
 
 	// rpc calls based on task type (map or reduce)
-	var reply []MapReply
+	// var reply []MapReply
+	// var reply int // 0 or 1 - fail/success?
+	var reply []MapKeyValue
 	if taskType == "Map" {
 		fmt.Printf("\nleader calls worker to do map")
 		err = client.Call("Worker.Map", taskArgs, &reply)
@@ -87,20 +89,15 @@ func read_file_chunk(chunkSize int64, startByte int64, filePath string) string {
 	}
 	fmt.Printf("n: %v\n", n)
 
-	//split content into a wordlist
-	fileChunkWords := string(buf)
+	// split content into a wordlist; make everything lowercase
+	fileChunkWords := strings.ToLower(string(buf))
+	// remove punctuations (only keep a-z and 0-9)
+	fileChunkWords = regexp.MustCompile(`[^a-z0-9 ]+`).ReplaceAllString(fileChunkWords, " ")
+	fmt.Printf("fileChunkWords: ", fileChunkWords)
 	return fileChunkWords
-	// re1 := regexp.MustCompile(`\p{P}|[^\S+]`)
-	// wordList := re1.Split(fileChunkWords, -1)
-
-	//add to dicitonary
-	// for j := 0; j < len(wordList); j++{
-	// 	if wordList[j] != ""{
-	// 		lowercaseWord := strings.ToLower(wordList[j])
-	// 		numWordDouble[lowercaseWord] += 1
-	// 	}
-	// }
 }
+
+
 func split_chunk(files []string) []string {
 	var chunkArray []string
 	for i := 0; i < len(files); i++ {
@@ -121,12 +118,11 @@ func split_chunk(files []string) []string {
 			//if remaining bytes of the file is smaller than file chunk edge case
 			if sizeOfFile <= int64(startByte)+sizeOfFileChunk {
 				//if the remaining byte is smaller than the expected chunk size
-				//fmt.Print("remaining bytes less than size")
 				sizeOfFileChunk = sizeOfFile - startByte
 			}
 			// checks if start byte at the end of the file
 			if startByte >= sizeOfFile {
-				//fmt.Print("end of search")
+				fmt.Print("end of search")
 			} else {
 				newChunk := read_file_chunk(sizeOfFileChunk, startByte, files[i])
 				chunkArray = append(chunkArray, newChunk)
@@ -171,12 +167,12 @@ func main() {
 			mapArgs := &MapArgs{Chunk: chunkArray[firstChunk:numChunksForOneWorker]}
 			firstChunk += numChunksForOneWorker
 			fmt.Print("\nmapArgs: ", mapArgs)
-			err, mapReply := assignTaskToWorker("Map", mapArgs, address)
+			err, reply := assignTaskToWorker("Map", mapArgs, address)
 			if err != nil {
-				fmt.Printf("error assigning map task: %v", err)
+				fmt.Printf("\nerror assigning map task: %v", err)
 			}
-			fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, reply - %s",
-				mapArgs.Chunk, mapReply)
+			fmt.Printf("\n\nLeader calls map rpc: chunk - %s", "reply - %s",
+				mapArgs.Chunk, reply)
 
 			// assign reduce tasks - mocked; did not need to implement
 			// reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
@@ -188,12 +184,12 @@ func main() {
 			// 	reduceArgs.Key, reduceArgs.Value, reduceReply)
 
 			// aggregate word counts from map reply
-			for _, reply := range mapReply {
-				_, ok := wordCounts[reply.Key]
+			for _, kv := range reply {
+				_, ok := wordCounts[kv.Key]
 				if ok  {
-					wordCounts[reply.Key] += 1
+					wordCounts[kv.Key] += 1
 				} else {
-					wordCounts[reply.Key] = 1
+					wordCounts[kv.Key] = 1
 				}
 			}
 		}
@@ -207,7 +203,7 @@ func main() {
 		defer outputFile.Close()
 
 		for word, count := range wordCounts {
-			_, err := fmt.Fprintf(outputFile, "%s: %d\n", word, count)
+			_, err := fmt.Fprintf(outputFile, "%s %d\n", word, count)
 			if err != nil {
 				log.Fatal("Error writing to output file:", err)
 			}
