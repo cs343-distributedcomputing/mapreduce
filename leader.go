@@ -138,7 +138,9 @@ func main() {
 	done := false       // status of mapreduce entire operation
 	// TODO: flag done as true once entire operation finishes
 
-	// periodically check worker status to reassign tasks
+	// keep track of all the words and their counts
+	wordCounts := make(map[string]int)
+
 	for !done {
 		if filesProcessed >= numInputFiles {
 			break // no more tasks to assign
@@ -153,9 +155,6 @@ func main() {
 		fmt.Print("\n chunkArray: ", chunkArray)
 
 		numChunksForOneWorker := len(chunkArray) / len(addressList)
-
-		// TODO: keep track of all the words and their counts
-		wordCounts := make(map[string]int)
 
 		// for each worker get {chunkArray/numWrokers} number of chunks
 		// dial server to make rpc's
@@ -194,20 +193,20 @@ func main() {
 			}
 		}
 		filesProcessed++
-
-		// write final word counts to output file
-		outputFile, err := os.Create("output.txt")
-		if err != nil {
-			log.Fatal("failed to create output file:", err)
-		}
-		defer outputFile.Close()
-
-		for word, count := range wordCounts {
-			_, err := fmt.Fprintf(outputFile, "%s %d\n", word, count)
-			if err != nil {
-				log.Fatal("Error writing to output file:", err)
-			}
-		}
-		fmt.Println("\nword counts written to output file successfully.")
 	}
+	
+	// write final word counts to output file
+	outputFile, err := os.Create("output.txt")
+	if err != nil {
+		log.Fatal("failed to create output file:", err)
+	}
+	defer outputFile.Close()
+
+	for word, count := range wordCounts {
+		_, err := fmt.Fprintf(outputFile, "%s %d\n", word, count)
+		if err != nil {
+			log.Fatal("Error writing to output file:", err)
+		}
+	}
+	fmt.Println("\nword counts written to output file successfully.")
 }
