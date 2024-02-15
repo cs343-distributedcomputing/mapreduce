@@ -6,12 +6,12 @@
 package main
 
 import (
-	// "errors"
-	"net"
-	"net/rpc"
-	"net/http"
-	"log"
 	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"strings"
 )
 
 type Worker struct {
@@ -19,18 +19,36 @@ type Worker struct {
 }
 
 type MapKeyValue struct {
-	Key string
+	Key   string
 	Value string
 }
 
+type MapArgs struct {
+	Chunk []string
+}
+
 type ReducKeyValue struct {
-	Key string
+	Key    string
 	Values []string
 }
 
-func (t *Worker) Map(args *MapKeyValue, reply *int) error {
+// returns mapReply of list of key val pairs
+// ex: [MapKeyValue{"hi": "1"}, MapKeyValue{"hi", "1"}, MapKeyValue{"hey", "1"}]
+func (t *Worker) Map(args MapArgs, reply *[]MapKeyValue) error { 
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
+	//fmt.Printf(string(args.Chunk))
+	chunks := args.Chunk
+	//words := strings.Fields(args) // split by white space
+	var kvPairs []MapKeyValue
+	for _, chunk := range chunks {
+		words := strings.Fields(chunk)
+		for _, word := range words {
+			kvPairs = append(kvPairs, MapKeyValue{word, "1"})
+			fmt.Printf("\n" + word)
+		}
+	}
+	*reply = kvPairs
 	return nil
 }
 
@@ -45,8 +63,9 @@ func main() {
 	rpc.Register(worker)
 	rpc.HandleHTTP()
 
-	fmt.Printf("\nWorker is listening...")
-	l, err := net.Listen("tcp", ":3002")
+	port := ":3000" // change as needed
+	fmt.Printf("\nWorker is listening at port: " + port)
+	l, err := net.Listen("tcp", port)
 
 	if err != nil {
 		log.Fatal("\nlisten error:", err)

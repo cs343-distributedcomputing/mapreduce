@@ -1,169 +1,213 @@
-// assigns one worker to do map or reduce
-// check if a worker is alive
-// tally of words
-// status of worker: idle, in-progress, completed
-
-// calls rpc
 package main
 
 import (
-	"log"
-	"net/rpc"
 	"errors"
 	"fmt"
+	"log"
+	"net/rpc"
+	"os"
+	"regexp"
+	"io"
+	"strings"
 )
 
-
 type MapArgs struct {
-	Key string
+	Chunk []string
+}
+
+type MapKeyValue struct {
+	Key   string
 	Value string
 }
 
 type ReduceArgs struct {
-	Key string
+	Key   string
 	Value []string
 }
 
-type Worker struct { // redundant, also in worker.go?
-	Status string // idle, in-progress
-}
-
 var ( // global vars
-	serverAddress string = "10.154.0.117"
-	workers []*Worker = []*Worker{ // 4 workers for example
-		{Status: "idle"},
-		// {Status: "idle"},
-		// {Status: "idle"},
-		// {Status: "idle"},
+	serverAddress string  = "localhost"
+	files []string = []string{
+		"input/test.txt",
+		//"input/",
+		// "input/",
 	}
 )
 
-func (t *Worker) SetWorkerStatus(status string) {
-	t.Status = status
-}
-
-func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (error, int) {
-	if len(workers) == 0 {
-		return errors.New("\nno workers defined"), -1
-	}
-
-	// find idle worker to assign task to
-	var worker *Worker
-	for _, w := range workers {
-		if w.Status == "idle" {
-			worker = w
-			break
-		}
-	}
-
-	if worker == nil {
-		return errors.New("no idle worker available"), -1
-	}
-
-	// change status of worker to 'in-progress' since it's getting a task
-	worker.SetWorkerStatus("in-progress")
-
-	
+func assignTaskToWorker(taskType string, taskArgs interface{}, address string) (error, []MapKeyValue) {
+	fmt.Printf("\nassigning tasks")
 	client, err := rpc.DialHTTP("tcp", serverAddress + ":" + address)
 	if err != nil {
 		log.Fatal("dialing:", err)
-		return err, -1
+		return err, nil
 	}
+	fmt.Printf("\nhttp dialed")
 
 	// client1, err1 := rpc.DialHTTP("tcp", serverAddress + ":3001")
 	// if err1 != nil {
 	// 	log.Fatal("dialing:", err1)
-	// 	return err1, -1
+	// 	return err1, nil
 	// }
 
 	// client2, err2 := rpc.DialHTTP("tcp", serverAddress + ":3002")
 	// if err2 != nil {
 	// 	log.Fatal("dialing:", err2)
-	// 	return err2, -1
+	// 	return err2, nil
 	// }
 
 	// rpc calls based on task type (map or reduce)
-	var reply int
+	// var reply []MapReply
+	// var reply int // 0 or 1 - fail/success?
+	var reply []MapKeyValue
 	if taskType == "Map" {
+		fmt.Printf("\nleader calls worker to do map")
 		err = client.Call("Worker.Map", taskArgs, &reply)
 	} else if taskType == "Reduce" {
 		err = client.Call("Worker.Reduce", taskArgs, &reply)
 	} else {
 		err = errors.New("invalid task type :<")
 	}
-
-	// after worker is done reset its status to available/idle
-	worker.SetWorkerStatus("idle")
-
+	fmt.Printf("\nreply: ", reply)
 	return err, reply
 }
 
+
+func read_file_chunk(chunkSize int64, startByte int64, filePath string) string {
+	//read from full file the designated chunk of bytes into the buffer
+	fileContent, err := os.ReadFile(filePath)
+	if err != nil {
+		panic(err)
+	}
+	stringFileContent := string(fileContent)
+	reader := strings.NewReader(stringFileContent)
+	r := io.NewSectionReader(reader, startByte, chunkSize)
+
+	buf := make([]byte, chunkSize)
+	n, err := r.Read(buf)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("n: %v\n", n)
+
+	// split content into a wordlist; make everything lowercase
+	fileChunkWords := strings.ToLower(string(buf))
+	// remove punctuations (only keep a-z and 0-9)
+	fileChunkWords = regexp.MustCompile(`[^a-z0-9 ]+`).ReplaceAllString(fileChunkWords, " ")
+	fmt.Printf("fileChunkWords: ", fileChunkWords)
+	return fileChunkWords
+}
+
+
+func split_chunk(files []string) []string {
+	var chunkArray []string
+	for i := 0; i < len(files); i++ {
+		//divide file based on length
+		file, err := os.Open(files[i])
+		if err != nil {
+			log.Fatal(err)
+		}
+		fi, err := file.Stat()
+		if err != nil {
+			log.Fatal(err)
+		}
+		sizeOfFile := fi.Size()
+		sizeOfFileChunk := int64(100)
+
+		//Loop through a file and call thread for each chunk
+		for startByte := int64(0); startByte < sizeOfFile; startByte = startByte + sizeOfFileChunk {
+			//if remaining bytes of the file is smaller than file chunk edge case
+			if sizeOfFile <= int64(startByte)+sizeOfFileChunk {
+				//if the remaining byte is smaller than the expected chunk size
+				sizeOfFileChunk = sizeOfFile - startByte
+			}
+			// checks if start byte at the end of the file
+			if startByte >= sizeOfFile {
+				fmt.Print("end of search")
+			} else {
+				newChunk := read_file_chunk(sizeOfFileChunk, startByte, files[i])
+				chunkArray = append(chunkArray, newChunk)
+			}
+		}
+	}
+	return chunkArray
+}
+
 func main() {
-	// leader, err := rpc.DialHTTP("tcp", serverAddress + ":3000")
-	// if err != nil {
-	// 	log.Fatal("\ndialing error:", err)
-	// }
-
-	// // map and reduce rpc calls for multiple worker machines
-	// numWorkers := 3
-	// for i:=0; i < numWorkers; i++ {
-	// 	// sync call: MAP
-	// 	mapArgs := &MapArgs{"test","1"} // args for map or reduce funcs
-	// 	var mapReply int
-	// 	err = leader.Call("Worker.Map", mapArgs, &mapReply)
-	// 	if err != nil {
-	// 		log.Fatal("\nworker map error:", err)
-	// 	}
-	// 	fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, err reply - %d", 
-	// 		mapArgs.Key, mapArgs.Value, mapReply)
-
-	// 	// sync call: REDUCE
-	// 	var reduceArgList = []string{"1", "1"}
-	// 	reduceArgs := &ReduceArgs{"test", reduceArgList} // args for map or reduce funcs
-	// 	var reduceReply int
-	// 	err = leader.Call("Worker.Reduce", reduceArgs, &reduceReply)
-	// 	if err != nil {
-	// 		log.Fatal("\n\nworker reduce error:", err)
-	// 	}
-	// 	fmt.Printf("\nLeader calls reduce rpc: key - %s, value - %s, err reply - %d", 
-	// 		reduceArgs.Key, reduceArgs.Value, reduceReply)
-	// }
-
-	numInputFiles := 1 // change as needed
+	numInputFiles := 1  // change as needed
 	filesProcessed := 0 // increment as files are processed
-	done := false // status of mapreduce entire operation 
+	done := false       // status of mapreduce entire operation
 	// TODO: flag done as true once entire operation finishes
 
 	// periodically check worker status to reassign tasks
 	for !done {
-        if filesProcessed >= numInputFiles {
+		if filesProcessed >= numInputFiles {
 			break // no more tasks to assign
 		}
 
-        // assign map tasks
-		var addressList [3]string
+		var addressList [1]string
 		addressList[0] = "3000"
-		addressList[1] = "3001"
-		addressList[2] = "3002"
-		// dial server to make rpc's
-		for _, address := range addressList {
-			mapArgs := &MapArgs{Key: "test", Value: "1"}
-			err, mapReply := assignTaskToWorker("Map", mapArgs, address)
-			if err != nil {
-				log.Printf("error assigning map task: %v", err)
-			}
-			fmt.Printf("\n\nLeader calls map rpc: key - %s, value - %s, reply - %d", 
-						mapArgs.Key, mapArgs.Value, mapReply)
+		// addressList[1] = "3001"
+		// addressList[2] = "3002"
 
-			// assign reduce tasks
-			reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
-			err, reduceReply := assignTaskToWorker("Reduce", reduceArgs, address)
+		chunkArray := split_chunk(files)
+		fmt.Print("\n chunkArray: ", chunkArray)
+
+		numChunksForOneWorker := len(chunkArray) / len(addressList)
+
+		// TODO: keep track of all the words and their counts
+		wordCounts := make(map[string]int)
+
+		// for each worker get {chunkArray/numWrokers} number of chunks
+		// dial server to make rpc's
+		for _, address := range addressList { // for each worker
+			// loop thru number of chunks that one worker needs to work on
+			// first chunk is the index of the first chunk that the address will grab
+			firstChunk := 0
+			// assign map tasks
+			mapArgs := &MapArgs{Chunk: chunkArray[firstChunk:numChunksForOneWorker]}
+			firstChunk += numChunksForOneWorker
+			fmt.Print("\nmapArgs: ", mapArgs)
+			err, reply := assignTaskToWorker("Map", mapArgs, address)
 			if err != nil {
-				log.Printf("error assigning reduce task: %v", err)
+				fmt.Printf("\nerror assigning map task: %v", err)
 			}
-			fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d", 
-			reduceArgs.Key, reduceArgs.Value, reduceReply)
+			fmt.Printf("\n\nLeader calls map rpc: chunk - %s", "reply - %s",
+				mapArgs.Chunk, reply)
+
+			// assign reduce tasks - mocked; did not need to implement
+			// reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
+			// err, reduceReply := assignTaskToWorker("Reduce", reduceArgs, address)
+			// if err != nil {
+			// 	fmt.Printf("error assigning reduce task: %v", err)
+			// }
+			// fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d",
+			// 	reduceArgs.Key, reduceArgs.Value, reduceReply)
+
+			// aggregate word counts from map reply
+			for _, kv := range reply {
+				_, ok := wordCounts[kv.Key]
+				if ok  {
+					wordCounts[kv.Key] += 1
+				} else {
+					wordCounts[kv.Key] = 1
+				}
+			}
 		}
 		filesProcessed++
-    }
+
+		// write final word counts to output file
+		outputFile, err := os.Create("output.txt")
+		if err != nil {
+			log.Fatal("failed to create output file:", err)
+		}
+		defer outputFile.Close()
+
+		for word, count := range wordCounts {
+			_, err := fmt.Fprintf(outputFile, "%s %d\n", word, count)
+			if err != nil {
+				log.Fatal("Error writing to output file:", err)
+			}
+		}
+		fmt.Println("\nword counts written to output file successfully.")
+	}
 }
