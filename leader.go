@@ -29,8 +29,8 @@ var ( // global vars
 	serverAddress string  = "localhost"
 	files []string = []string{
 		"input/test.txt",
-		//"input/",
-		// "input/",
+		"input/harry_potter1.txt",
+		"input/harry_potter2.txt",
 	}
 )
 
