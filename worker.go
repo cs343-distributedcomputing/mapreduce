@@ -37,7 +37,7 @@ type ReducKeyValue struct {
 func (t *Worker) Map(args MapArgs, reply *[]MapKeyValue) error { 
 	// TODO: map words; change return to error later
 	fmt.Printf("\n\nmap func called in worker machine")
-	//fmt.Printf(string(args.Chunk))
+	fmt.Printf("chunk in worker.map: ", string(args.Chunk))
 	chunks := args.Chunk
 	//words := strings.Fields(args) // split by white space
 	var kvPairs []MapKeyValue
@@ -63,7 +63,7 @@ func main() {
 	rpc.Register(worker)
 	rpc.HandleHTTP()
 
-	port := ":3000" // change as needed
+	port := ":3002" // change as needed
 	fmt.Printf("\nWorker is listening at port: " + port)
 	l, err := net.Listen("tcp", port)
 
