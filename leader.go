@@ -146,41 +146,25 @@ func main() {
 			break // no more tasks to assign
 		}
 
-		var addressList [1]string
+		var addressList [3]string
 		addressList[0] = "3000"
-		// addressList[1] = "3001"
-		// addressList[2] = "3002"
+		addressList[1] = "3001"
+		addressList[2] = "3002"
 
 		chunkArray := split_chunk(files)
-		fmt.Print("\n chunkArray: ", chunkArray)
+		fmt.Print("\nchunkArray: ", chunkArray)
+		fmt.Printf("\nchunkArray length: %d", len(chunkArray))
 
 		numChunksForOneWorker := len(chunkArray) / len(addressList)
+		fmt.Printf("\nnumChunksForOneWorker: %d", numChunksForOneWorker)
 
-		// for each worker get {chunkArray/numWrokers} number of chunks
-		// dial server to make rpc's
-		for _, address := range addressList { // for each worker
-			// loop thru number of chunks that one worker needs to work on
-			// first chunk is the index of the first chunk that the address will grab
-			firstChunk := 0
-			// assign map tasks
-			mapArgs := &MapArgs{Chunk: chunkArray[firstChunk:numChunksForOneWorker]}
-			firstChunk += numChunksForOneWorker
-			fmt.Print("\nmapArgs: ", mapArgs)
-			err, reply := assignTaskToWorker("Map", mapArgs, address)
+		// Edge case: small file less than 100 B -> give it to one worker
+		if numChunksForOneWorker == 0 { 
+			err, reply := assignTaskToWorker("Map", &MapArgs{Chunk: chunkArray}, addressList[0])
 			if err != nil {
 				fmt.Printf("\nerror assigning map task: %v", err)
 			}
-			fmt.Printf("\n\nLeader calls map rpc: chunk - %s", "reply - %s",
-				mapArgs.Chunk, reply)
-
-			// assign reduce tasks - mocked; did not need to implement
-			// reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
-			// err, reduceReply := assignTaskToWorker("Reduce", reduceArgs, address)
-			// if err != nil {
-			// 	fmt.Printf("error assigning reduce task: %v", err)
-			// }
-			// fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d",
-			// 	reduceArgs.Key, reduceArgs.Value, reduceReply)
+			fmt.Printf("\n\nLeader calls map rpc: chunk - %s", "reply - %s", chunkArray, reply)
 
 			// aggregate word counts from map reply
 			for _, kv := range reply {
@@ -191,10 +175,46 @@ func main() {
 					wordCounts[kv.Key] = 1
 				}
 			}
+		} else {
+			// for each worker get {chunkArray/numWrokers} number of chunks
+			// dial server to make rpc's
+			for _, address := range addressList { // for each worker
+				// loop thru number of chunks that one worker needs to work on
+				// first chunk is the index of the first chunk that the address will grab
+				firstChunk := 0
+				// assign map tasks
+				mapArgs := &MapArgs{Chunk: chunkArray[firstChunk:numChunksForOneWorker]}
+				firstChunk += numChunksForOneWorker
+				fmt.Print("\nmapArgs: ", mapArgs)
+				err, reply := assignTaskToWorker("Map", mapArgs, address)
+				if err != nil {
+					fmt.Printf("\nerror assigning map task: %v", err)
+				}
+				fmt.Printf("\n\nLeader calls map rpc: chunk - %s", "reply - %s", mapArgs.Chunk, reply)
+
+				// assign reduce tasks - mocked; did not need to implement
+				// reduceArgs := &ReduceArgs{Key: "test", Value: []string{"1", "1"}}
+				// err, reduceReply := assignTaskToWorker("Reduce", reduceArgs, address)
+				// if err != nil {
+				// 	fmt.Printf("error assigning reduce task: %v", err)
+				// }
+				// fmt.Printf("\n\nLeader calls reduce rpc: key - %s, value - %s, reply - %d",
+				// 	reduceArgs.Key, reduceArgs.Value, reduceReply)
+
+				// aggregate word counts from map reply
+				for _, kv := range reply {
+					_, ok := wordCounts[kv.Key]
+					if ok  {
+						wordCounts[kv.Key] += 1
+					} else {
+						wordCounts[kv.Key] = 1
+					}
+				}
+			}
 		}
 		filesProcessed++
 	}
-	
+
 	// write final word counts to output file
 	outputFile, err := os.Create("output.txt")
 	if err != nil {
