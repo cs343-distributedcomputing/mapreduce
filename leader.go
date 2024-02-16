@@ -178,12 +178,15 @@ func main() {
 		} else {
 			// for each worker get {chunkArray/numWrokers} number of chunks
 			// dial server to make rpc's
+			// first chunk is the index of the first chunk that the address will grab
+			firstChunk := 0
 			for _, address := range addressList { // for each worker
-				// loop thru number of chunks that one worker needs to work on
-				// first chunk is the index of the first chunk that the address will grab
-				firstChunk := 0
+				if firstChunk >= len(chunkArray) {
+					break 
+				}
+				
 				// assign map tasks
-				mapArgs := &MapArgs{Chunk: chunkArray[firstChunk:numChunksForOneWorker]}
+				mapArgs := &MapArgs{Chunk: chunkArray[firstChunk : firstChunk + numChunksForOneWorker]}
 				firstChunk += numChunksForOneWorker
 				fmt.Print("\nmapArgs: ", mapArgs)
 				err, reply := assignTaskToWorker("Map", mapArgs, address)
